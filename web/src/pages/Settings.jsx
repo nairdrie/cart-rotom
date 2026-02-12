@@ -27,10 +27,17 @@ export default function Settings() {
     
     // Notifications state
     const [activeTab, setActiveTab] = useState('payment'); // 'payment' or 'notifications'
+    const [notificationType, setNotificationType] = useState('webhook'); // 'webhook' or 'telegram'
     const [webhookUrl, setWebhookUrl] = useState('');
     const [webhookType, setWebhookType] = useState('');
     const [testingWebhook, setTestingWebhook] = useState(false);
     const [savingWebhook, setSavingWebhook] = useState(false);
+    
+    // Telegram state
+    const [telegramUserId, setTelegramUserId] = useState('');
+    const [telegramConnected, setTelegramConnected] = useState(false);
+    const [testingTelegram, setTestingTelegram] = useState(false);
+    const [savingTelegram, setSavingTelegram] = useState(false);
 
     // Fetch payment methods
     useEffect(() => {
@@ -54,7 +61,7 @@ export default function Settings() {
         return unsubscribe;
     }, [currentUser]);
 
-    // Fetch webhook URL
+    // Fetch notification settings (webhook and Telegram)
     useEffect(() => {
         if (!currentUser) return;
 
@@ -62,29 +69,21 @@ export default function Settings() {
         const unsubscribe = onSnapshot(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.data();
-                setWebhookUrl(data.notificationWebhook || '');
-                detectWebhookType(data.notificationWebhook || '');
-            }
-        }, (error) => {
-            console.error("Error fetching webhook:", error);
-        });
-
-        return unsubscribe;
-    }, [currentUser]);
-
-    // Fetch webhook settings
-    useEffect(() => {
-        if (!currentUser) return;
-
-        const userRef = doc(db, 'users', currentUser.uid);
-        const unsubscribe = onSnapshot(userRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.data();
+                
+                // Webhook settings
                 setWebhookUrl(data.notificationWebhook || '');
                 setWebhookType(detectWebhookType(data.notificationWebhook || ''));
+                
+                // Telegram settings
+                const telegramConfig = data.notificationTelegram;
+                if (telegramConfig) {
+                    setTelegramUserId(telegramConfig.userId || '');
+                    setTelegramConnected(!!telegramConfig.userId);
+                    setNotificationType(data.notificationType || 'webhook');
+                }
             }
         }, (error) => {
-            console.error("Error fetching webhook settings:", error);
+            console.error("Error fetching notification settings:", error);
         });
 
         return unsubscribe;
@@ -225,6 +224,71 @@ export default function Settings() {
         } finally {
             setTestingWebhook(false);
         }
+    };
+
+    const handleSaveTelegram = async (e) => {
+        e.preventDefault();
+        setSavingTelegram(true);
+
+        try {
+            const functions = getFunctions();
+            const saveTelegram = httpsCallable(functions, 'saveTelegram');
+            
+            await saveTelegram({ userId: telegramUserId });
+            setTelegramConnected(true);
+            alert('Telegram notifications enabled!');
+            setNotificationType('telegram');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to save Telegram settings: ' + err.message);
+        } finally {
+            setSavingTelegram(false);
+        }
+    };
+
+    const handleTestTelegram = async () => {
+        if (!telegramUserId) {
+            alert('Please enter your Telegram user ID first');
+            return;
+        }
+
+        setTestingTelegram(true);
+
+        try {
+            const functions = getFunctions();
+            const testTelegram = httpsCallable(functions, 'testTelegram');
+            
+            await testTelegram({ userId: telegramUserId });
+            alert('Test notification sent to Telegram!');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to send test notification: ' + err.message);
+        } finally {
+            setTestingTelegram(false);
+        }
+    };
+
+    const handleDisconnectTelegram = async () => {
+        if (!confirm('Disconnect Telegram notifications?')) return;
+
+        try {
+            const functions = getFunctions();
+            const disconnectTelegram = httpsCallable(functions, 'disconnectTelegram');
+            
+            await disconnectTelegram({});
+            setTelegramUserId('');
+            setTelegramConnected(false);
+            setNotificationType('webhook');
+            alert('Telegram disconnected.');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to disconnect: ' + err.message);
+        }
+    };
+
+    const handleWebhookUrlChange = (value) => {
+        setWebhookUrl(value);
+        setWebhookType(detectWebhookType(value));
     };
 
     // Format card number with spaces
@@ -556,68 +620,116 @@ export default function Settings() {
                 {/* Notifications Tab */}
                 {activeTab === 'notifications' && (
                     <>
+                        {/* Notification Type Selector */}
+                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-6">
+                            <h2 className="text-xl font-bold text-white mb-4">Choose Notification Method</h2>
+                            
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => setNotificationType('webhook')}
+                                    className={`flex-1 p-4 rounded-xl border-2 transition-all ${
+                                        notificationType === 'webhook'
+                                            ? 'border-blue-500 bg-blue-500/10'
+                                            : 'border-white/10 bg-black/20 hover:border-white/20'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.658 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                        </svg>
+                                        <span className="font-bold text-white">Webhooks</span>
+                                    </div>
+                                    <p className="text-sm text-gray-400 text-left">Discord, Slack, or Custom</p>
+                                </button>
+                                
+                                <button
+                                    onClick={() => setNotificationType('telegram')}
+                                    className={`flex-1 p-4 rounded-xl border-2 transition-all ${
+                                        notificationType === 'telegram'
+                                            ? 'border-blue-500 bg-blue-500/10'
+                                            : 'border-white/10 bg-black/20 hover:border-white/20'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295-.042 0-.084 0-.127-.012l.214-3.054 5.56-5.022c.242-.213-.054-.328-.373-.115l-6.869 4.326-2.96-.924c-.643-.204-.658-.643.135-.953l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+                                        </svg>
+                                        <span className="font-bold text-white">Telegram</span>
+                                    </div>
+                                    <p className="text-sm text-gray-400 text-left">Direct messages from bot</p>
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Info Banner */}
                         <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 mb-6 flex items-start gap-3">
                             <svg className="w-6 h-6 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
                             <div>
-                                <h3 className="font-bold text-blue-200 mb-1">Webhook Notifications</h3>
+                                <h3 className="font-bold text-blue-200 mb-1">
+                                    {notificationType === 'telegram' ? 'Telegram Notifications' : 'Webhook Notifications'}
+                                </h3>
                                 <p className="text-blue-300/80 text-sm">
-                                    Get notified when items go in or out of stock. Supports Discord webhooks, Slack webhooks, and generic JSON webhooks.
+                                    {notificationType === 'telegram'
+                                        ? 'Get notified instantly on Telegram when items go in or out of stock.'
+                                        : 'Get notified when items go in or out of stock. Supports Discord, Slack, and generic webhooks.'
+                                    }
                                 </p>
                             </div>
                         </div>
 
-                        {/* Webhook Configuration */}
-                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-6">
-                            <h2 className="text-xl font-bold text-white mb-6">Webhook Configuration</h2>
-                            
-                            <form onSubmit={handleSaveWebhook} className="space-y-6">
-                                <div>
-                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">
-                                        Webhook URL
-                                    </label>
-                                    <input
-                                        type="url"
-                                        value={webhookUrl}
-                                        onChange={(e) => handleWebhookUrlChange(e.target.value)}
-                                        placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/..."
-                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                    />
-                                    {webhookType && (
-                                        <p className="text-sm text-gray-400 mt-2 flex items-center gap-2">
-                                            <span className="inline-flex items-center px-2 py-1 rounded-lg bg-green-500/20 text-green-300 text-xs font-medium">
-                                                {webhookType}
-                                            </span>
-                                            Webhook type detected
-                                        </p>
-                                    )}
+                        {notificationType === 'webhook' ? (
+                            <>
+                                {/* Webhook Configuration */}
+                                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-6">
+                                    <h2 className="text-xl font-bold text-white mb-6">Webhook Configuration</h2>
+                                    
+                                    <form onSubmit={handleSaveWebhook} className="space-y-6">
+                                        <div>
+                                            <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">
+                                                Webhook URL
+                                            </label>
+                                            <input
+                                                type="url"
+                                                value={webhookUrl}
+                                                onChange={(e) => handleWebhookUrlChange(e.target.value)}
+                                                placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/..."
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                            />
+                                            {webhookType && (
+                                                <p className="text-sm text-gray-400 mt-2 flex items-center gap-2">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-green-500/20 text-green-300 text-xs font-medium">
+                                                        {webhookType}
+                                                    </span>
+                                                    Webhook type detected
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="submit"
+                                                disabled={savingWebhook || !webhookUrl}
+                                                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all"
+                                            >
+                                                {savingWebhook ? 'Saving...' : 'Save Webhook'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleTestWebhook}
+                                                disabled={testingWebhook || !webhookUrl}
+                                                className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition-all"
+                                            >
+                                                {testingWebhook ? 'Testing...' : 'Test Webhook'}
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
 
-                                <div className="flex gap-3">
-                                    <button
-                                        type="submit"
-                                        disabled={savingWebhook || !webhookUrl}
-                                        className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all"
-                                    >
-                                        {savingWebhook ? 'Saving...' : 'Save Webhook'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleTestWebhook}
-                                        disabled={testingWebhook || !webhookUrl}
-                                        className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition-all"
-                                    >
-                                        {testingWebhook ? 'Testing...' : 'Test Webhook'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        {/* Webhook Examples */}
-                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-                            <h3 className="text-lg font-bold text-white mb-4">Supported Webhook Types</h3>
+                                {/* Webhook Examples */}
+                                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+                                    <h3 className="text-lg font-bold text-white mb-4">Supported Webhook Types</h3>
                             
                             <div className="space-y-4">
                                 <div className="bg-black/30 rounded-xl p-4">
@@ -666,6 +778,92 @@ export default function Settings() {
                                 </div>
                             </div>
                         </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* Telegram Configuration */}
+                                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-6">
+                                    <h2 className="text-xl font-bold text-white mb-6">Telegram Setup</h2>
+                                    
+                                    {telegramConnected ? (
+                                        <div className="space-y-4">
+                                            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+                                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                                                    </svg>
+                                                    <span className="font-bold text-green-300">Connected</span>
+                                                </div>
+                                                <p className="text-sm text-green-200">Telegram notifications are active for user ID: {telegramUserId}</p>
+                                            </div>
+
+                                            <button
+                                                onClick={handleDisconnectTelegram}
+                                                className="w-full bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 font-bold py-3 rounded-xl transition-all"
+                                            >
+                                                Disconnect Telegram
+                                            </button>
+
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={handleTestTelegram}
+                                                    disabled={testingTelegram}
+                                                    className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all"
+                                                >
+                                                    {testingTelegram ? 'Testing...' : 'Test Telegram'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handleSaveTelegram} className="space-y-6">
+                                            <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 mb-6">
+                                                <h4 className="font-bold text-white mb-2">How to connect:</h4>
+                                                <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+                                                    <li>Open Telegram and search for <code className="bg-black/40 px-2 py-1 rounded text-white font-mono">@CartRotomBot</code></li>
+                                                    <li>Click <span className="font-bold">Start</span> or send <code className="bg-black/40 px-2 py-1 rounded text-white font-mono">/start</code></li>
+                                                    <li>The bot will send you your Telegram User ID</li>
+                                                    <li>Paste your User ID below</li>
+                                                </ol>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">
+                                                    Telegram User ID
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={telegramUserId}
+                                                    onChange={(e) => setTelegramUserId(e.target.value.replace(/\D/g, ''))}
+                                                    placeholder="123456789"
+                                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono"
+                                                />
+                                                <p className="text-xs text-gray-500 mt-2">
+                                                    You can find this in the welcome message from @CartRotomBot
+                                                </p>
+                                            </div>
+
+                                            <div className="flex gap-3">
+                                                <button
+                                                    type="submit"
+                                                    disabled={savingTelegram || !telegramUserId}
+                                                    className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all"
+                                                >
+                                                    {savingTelegram ? 'Connecting...' : 'Connect Telegram'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleTestTelegram}
+                                                    disabled={testingTelegram || !telegramUserId}
+                                                    className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition-all"
+                                                >
+                                                    {testingTelegram ? 'Testing...' : 'Test'}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </>
                 )}
             </main>
