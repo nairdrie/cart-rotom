@@ -8,6 +8,7 @@ const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
 const { encryptCardData, decryptCardData, encrypt, decrypt } = require("./cardEncryption");
+const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 
 
 admin.initializeApp();
@@ -313,15 +314,23 @@ async function fetchWithPuppeteer(url) {
  */
 async function fireWebhook(userId, agentId, agent, isInStock) {
     try {
-        // Fetch user's webhook URL
+        // Fetch user's notification settings
         const userDoc = await db.collection("users").doc(userId).get();
         
         if (!userDoc.exists) {
-            logger.warn(`User ${userId} not found for webhook`);
+            logger.warn(`User ${userId} not found for notification`);
             return;
         }
 
         const userData = userDoc.data();
+        const notificationType = userData.notificationType || 'webhook';
+
+        // Route to appropriate notification handler
+        if (notificationType === 'telegram' && userData.notificationTelegram) {
+            return await fireTelegram(userId, agentId, agent, isInStock, userData.notificationTelegram);
+        }
+
+        // Default to webhook
         let webhookUrl = userData.notificationWebhook;
 
         // Check for per-agent webhook override (future feature)
@@ -330,7 +339,7 @@ async function fireWebhook(userId, agentId, agent, isInStock) {
         }
 
         if (!webhookUrl) {
-            logger.info(`No webhook configured for user ${userId}`);
+            logger.info(`No notification configured for user ${userId}`);
             return;
         }
 
@@ -695,3 +704,216 @@ exports.updatePaymentMethod = onCall(async (request) => {
         throw new Error("Failed to update payment method");
     }
 });
+
+// ============================================
+// TELEGRAM NOTIFICATION FUNCTIONS
+// ============================================
+
+/**
+ * Send Telegram notification
+ * @param {string} userId - User ID
+ * @param {string} agentId - Agent ID
+ * @param {object} agent - Agent data
+ * @param {boolean} isInStock - Current stock status
+ * @param {object} telegramConfig - Telegram config with userId
+ */
+async function fireTelegram(userId, agentId, agent, isInStock, telegramConfig) {
+    try {
+        if (!telegramConfig.userId) {
+            logger.warn(`Telegram user ID not found for user ${userId}`);
+            return;
+        }
+
+        // Get Telegram bot token from Google Cloud Secret Manager
+        let telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (!telegramBotToken) {
+            telegramBotToken = await getSecret('TELEGRAM_BOT_TOKEN');
+        }
+        
+        if (!telegramBotToken) {
+            logger.error("TELEGRAM_BOT_TOKEN not configured");
+            return;
+        }
+
+        const status = isInStock ? "IN STOCK ✅" : "OUT OF STOCK ❌";
+        const title = agent.alias || agent.name || "Product";
+        const emoji = isInStock ? "✅" : "❌";
+
+        // Build Telegram message
+        const message = `${emoji} *${title}*\n\nStatus: ${status}\n\nURL: ${agent.url}\n\nTime: ${new Date().toLocaleString()}`;
+
+        // Send via Telegram Bot API
+        const url = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
+        await axios.post(url, {
+            chat_id: telegramConfig.userId,
+            text: message,
+            parse_mode: "Markdown"
+        }, {
+            timeout: 5000
+        });
+
+        logger.info(`Telegram message sent successfully for agent ${agentId}`);
+
+    } catch (error) {
+        logger.error(`Telegram notification failed for agent ${agentId}: ${error.message}`);
+        // Don't fail the agent check if Telegram fails
+    }
+}
+
+/**
+ * Save Telegram user ID (callable function)
+ */
+exports.saveTelegram = onCall(async (request) => {
+    const { auth, data } = request;
+    
+    if (!auth) {
+        throw new Error("Unauthorized");
+    }
+
+    const { userId: telegramUserId } = data;
+    const userId = auth.uid;
+
+    try {
+        if (!telegramUserId) {
+            throw new Error("Telegram user ID is required");
+        }
+
+        // Save Telegram config to Firestore
+        await db.collection("users").doc(userId).set({
+            notificationType: 'telegram',
+            notificationTelegram: {
+                userId: telegramUserId,
+                connectedAt: admin.firestore.Timestamp.now()
+            },
+            updatedAt: admin.firestore.Timestamp.now()
+        }, { merge: true });
+
+        logger.info(`Telegram settings saved for user ${userId}`);
+
+        return { success: true, message: "Telegram connected successfully" };
+    } catch (error) {
+        logger.error(`Failed to save Telegram settings for user ${userId}: ${error.message}`);
+        throw new Error("Failed to save Telegram settings");
+    }
+});
+
+/**
+ * Test Telegram notification (callable function)
+ */
+exports.testTelegram = onCall(async (request) => {
+    const { auth, data } = request;
+    
+    if (!auth) {
+        throw new Error("Unauthorized");
+    }
+
+    const { userId: telegramUserId } = data;
+    const userId = auth.uid;
+
+    try {
+        if (!telegramUserId) {
+            throw new Error("Telegram user ID is required");
+        }
+
+        // Get Telegram bot token from Google Cloud Secret Manager
+        let telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (!telegramBotToken) {
+            telegramBotToken = await getSecret('TELEGRAM_BOT_TOKEN');
+        }
+        
+        if (!telegramBotToken) {
+            throw new Error("Telegram bot not configured");
+        }
+
+        // Send test message
+        const url = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
+        await axios.post(url, {
+            chat_id: telegramUserId,
+            text: "🧪 *Cart Rotom Test Notification*\n\nYour Telegram connection is working! ✅",
+            parse_mode: "Markdown"
+        }, {
+            timeout: 5000
+        });
+
+        logger.info(`Test Telegram message sent successfully for user ${userId}`);
+
+        return { success: true, message: "Test notification sent" };
+    } catch (error) {
+        logger.error(`Test Telegram failed for user ${userId}: ${error.message}`);
+        throw new Error(`Failed to send test notification: ${error.message}`);
+    }
+});
+
+/**
+ * Disconnect Telegram (callable function)
+ */
+exports.disconnectTelegram = onCall(async (request) => {
+    const { auth } = request;
+    
+    if (!auth) {
+        throw new Error("Unauthorized");
+    }
+
+    const userId = auth.uid;
+
+    try {
+        // Remove Telegram config and reset to webhook (or no notification)
+        await db.collection("users").doc(userId).set({
+            notificationType: 'webhook',
+            notificationTelegram: null,
+            updatedAt: admin.firestore.Timestamp.now()
+        }, { merge: true });
+
+        logger.info(`Telegram disconnected for user ${userId}`);
+
+        return { success: true, message: "Telegram disconnected" };
+    } catch (error) {
+        logger.error(`Failed to disconnect Telegram for user ${userId}: ${error.message}`);
+        throw new Error("Failed to disconnect Telegram");
+    }
+});
+
+// ============================================
+// SECRETS HELPER
+// ============================================
+
+// Cache secrets in memory to avoid repeated API calls
+const secretCache = {};
+const CACHE_TTL = 3600000; // 1 hour in milliseconds
+
+/**
+ * Get secret from Google Cloud Secret Manager
+ * @param {string} secretName - Name of the secret (e.g., TELEGRAM_BOT_TOKEN, CARD_ENCRYPTION_KEY)
+ * @returns {Promise<string>} - Secret value
+ */
+async function getSecret(secretName) {
+    // Check cache first
+    if (secretCache[secretName] && secretCache[secretName].expiresAt > Date.now()) {
+        return secretCache[secretName].value;
+    }
+
+    try {
+        const client = new SecretManagerServiceClient();
+        const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+        
+        if (!projectId) {
+            throw new Error("GCP_PROJECT environment variable not set");
+        }
+
+        const name = `projects/${projectId}/secrets/${secretName}/versions/latest`;
+        const [version] = await client.accessSecretVersion({ name });
+        const secretValue = version.payload.data.toString('utf8');
+        
+        // Cache for TTL
+        secretCache[secretName] = {
+            value: secretValue,
+            expiresAt: Date.now() + CACHE_TTL
+        };
+        
+        logger.info(`Retrieved secret ${secretName} from Google Cloud Secret Manager`);
+        return secretValue;
+    } catch (error) {
+        logger.error(`Failed to retrieve secret ${secretName}: ${error.message}`);
+        throw new Error(`Failed to retrieve secret: ${secretName}`);
+    }
+}
