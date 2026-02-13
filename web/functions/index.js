@@ -1,4 +1,7 @@
 
+// GitHub Actions automatic deployment is now configured
+// Merges to main will automatically trigger Cloud Functions deployment
+
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall } = require("firebase-functions/v2/https");
 const { logger } = require("firebase-functions");
