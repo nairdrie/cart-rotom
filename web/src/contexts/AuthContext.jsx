@@ -58,11 +58,11 @@ export function AuthProvider({ children }) {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setCurrentUser(user);
             if (user) {
-                await checkSubscription(user);
+                await checkSubscription(user);  // Wait for subscription check to complete
             } else {
                 setIsPaying(false);
             }
-            setLoading(false);
+            setLoading(false);  // Only set loading to false AFTER subscription check
         });
 
         return unsubscribe;
