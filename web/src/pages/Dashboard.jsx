@@ -138,32 +138,46 @@ export default function Dashboard() {
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/30 rounded-full blur-[120px]"></div>
             </div>
 
-            <header className="relative z-10 mb-12 flex justify-between items-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
-                <div>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                        Rotom Dashboard
-                    </h1>
-                    {currentUser && <p className="text-gray-400 text-sm mt-1 font-medium tracking-wide">
-                        Connected as <span className="text-blue-400">{currentUser.email}</span>
+            {/* Apple-inspired liquid glass header */}
+            <header className="relative z-10 mb-12 flex justify-between items-center bg-white/[0.05] backdrop-blur-[20px] border border-white/[0.08] rounded-[20px] px-8 py-5 shadow-lg">
+                {/* Logo placeholder on left */}
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-white/[0.08] border border-white/[0.12] flex items-center justify-center text-white/60">
+                        {/* Logo will be added here */}
+                        🔷
+                    </div>
+                    {currentUser && <p className="text-gray-400 text-xs font-medium tracking-wide hidden sm:block">
+                        <span className="text-white/60">{currentUser.email}</span>
                     </p>}
                 </div>
-                <div className="flex gap-4">
+                
+                {/* Right side: prominent action buttons */}
+                <div className="flex items-center gap-3">
+                    {/* Deploy button - main action */}
                     <button
                         onClick={() => navigate('/deploy')}
-                        className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] active:scale-95 flex items-center gap-2"
+                        className="bg-white/[0.12] hover:bg-white/[0.18] backdrop-blur-xl text-white font-semibold px-6 py-2.5 rounded-[12px] transition-all duration-200 border border-white/[0.15] hover:border-white/[0.25] shadow-[0_8px_32px_0_rgba(255,255,255,0.1)] active:scale-95 flex items-center gap-2"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                        Deploy Agent
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
+                        Deploy
                     </button>
+                    
+                    {/* Settings button - secondary action */}
                     <button
                         onClick={() => navigate('/settings')}
-                        className="bg-white/10 hover:bg-white/20 text-white font-medium px-5 py-2.5 rounded-xl transition-colors border border-white/5 font-medium backdrop-blur-md flex items-center gap-2"
+                        className="bg-white/[0.08] hover:bg-white/[0.14] backdrop-blur-xl text-white/80 hover:text-white font-medium px-4 py-2.5 rounded-[12px] transition-all duration-200 border border-white/[0.10] hover:border-white/[0.15]"
+                        title="Settings"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        Settings
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </button>
-                    <button onClick={handleLogout} className="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-xl transition-colors border border-white/5 font-medium backdrop-blur-md">
-                        Logout
+                    
+                    {/* Logout button - tertiary action */}
+                    <button 
+                        onClick={handleLogout} 
+                        className="bg-white/[0.06] hover:bg-red-500/[0.15] text-white/60 hover:text-red-200 text-xs font-medium px-3 py-2.5 rounded-[12px] transition-all duration-200 border border-white/[0.08] hover:border-red-500/[0.2]"
+                        title="Logout"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                     </button>
                 </div>
             </header>
@@ -242,7 +256,10 @@ export default function Dashboard() {
                             </div>
                         )}
                     </div>
-                ))}\n\n                {/* Render individual agents */}\n                {individualAgents.map(agent => (
+                ))}
+
+                {/* Render individual agents */}
+                {individualAgents.map(agent => (
                     <div key={agent.id} className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 transition-all duration-300 hover:bg-white/10 hover:scale-[1.02] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden">
 
                         {/* Thumbnail Background Effect */}
