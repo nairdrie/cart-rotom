@@ -946,10 +946,13 @@ async function getSecret(secretName) {
 
     try {
         const client = new SecretManagerServiceClient();
-        const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+        // Cloud Functions sets GCLOUD_PROJECT, fallback to other common env vars
+        const projectId = process.env.GCLOUD_PROJECT || 
+                         process.env.GCP_PROJECT || 
+                         process.env.GOOGLE_CLOUD_PROJECT;
         
         if (!projectId) {
-            throw new Error("GCP_PROJECT environment variable not set");
+            throw new Error("Could not determine GCP project ID from environment variables (GCLOUD_PROJECT, GCP_PROJECT, GOOGLE_CLOUD_PROJECT)");
         }
 
         const name = `projects/${projectId}/secrets/${secretName}/versions/latest`;
